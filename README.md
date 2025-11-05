@@ -1,3 +1,5 @@
+**This is a fork of https://github.com/uben0/tree-sitter-typst for publishing to crates.io. Please submit issues there.**
+
 # A Typst grammar for Tree-Sitter
 
 Typst official page https://typst.app

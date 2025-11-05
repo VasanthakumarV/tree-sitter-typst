@@ -1,6 +1,3 @@
-test: src/parser.c
-	tree-sitter test -f Test
-
 all: src/parser.c
 	tree-sitter test
 
