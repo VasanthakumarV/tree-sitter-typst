@@ -1,10 +1,10 @@
 [package]
 name = "codebook-tree-sitter-typst"
 description = "typst grammar for the tree-sitter parsing library"
-version = "0.12.1"
+version = "0.12.2"
 keywords = ["incremental", "parsing", "typst"]
 categories = ["parsing", "text-editors"]
-repository = "https://github.com/uben0/tree-sitter-typst"
+repository = "https://github.com/blopker/codebook-tree-sitter-typst"
 edition = "2018"
 license = "MIT"
 authors = ["Codebook Contributors"]
