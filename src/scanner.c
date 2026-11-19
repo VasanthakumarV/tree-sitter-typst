@@ -174,7 +174,7 @@ static void vec_u32_push(struct vec_u32* self, uint32_t value) {
 static uint32_t vec_u32_pop(struct vec_u32* self) {
 	assert(self != NULL, "vec_u32_pop");
 	assert(self->len > 0, "vec_u32_pop: empty vec");
-	return self->vec[self->len--];
+	return self->vec[--self->len];
 }
 static size_t vec_u32_serialize(struct vec_u32* self, char* buffer) {
 	assert(self != NULL, "vec_u32_serialize");
@@ -214,9 +214,11 @@ struct scanner {
 	struct vec_u32 worker;
 	// if directly after a token which is not space or comment token
 	bool immediate;
-	uint8_t heading_level;
+	// number of `=` that opened the last heading
+	uint32_t heading_level;
 	bool line_start;
-	uint8_t raw_level;
+	// number of backticks that opened the current raw block
+	uint32_t raw_level;
 };
 
 static void scanner_redent(struct scanner* self, uint32_t col) {
@@ -347,13 +349,26 @@ unsigned tree_sitter_typst_external_scanner_serialize(
 	char *buffer
 ) {
 	struct scanner* self = payload;
+	// The buffer holds TREE_SITTER_SERIALIZATION_BUFFER_SIZE bytes. A state that
+	// does not fit is not saved: returning 0 makes deserialize start from a
+	// fresh state.
+	size_t needed = 2 * sizeof(size_t)
+		+ (self->indentation.len + self->containers.len) * sizeof(uint32_t)
+		+ 2
+		+ sizeof self->heading_level
+		+ sizeof self->raw_level;
+	if (needed > TREE_SITTER_SERIALIZATION_BUFFER_SIZE) {
+		return 0;
+	}
 	size_t written = 0;
 	written += vec_u32_serialize(&self->indentation, buffer + written);
 	written += vec_u32_serialize(&self->containers, buffer + written);
 	buffer[written++] = self->immediate;
-	buffer[written++] = self->heading_level;
 	buffer[written++] = self->line_start;
-	buffer[written++] = self->raw_level;
+	memcpy(buffer + written, &self->heading_level, sizeof self->heading_level);
+	written += sizeof self->heading_level;
+	memcpy(buffer + written, &self->raw_level, sizeof self->raw_level);
+	written += sizeof self->raw_level;
 	return written;
 }
 
@@ -375,9 +390,10 @@ void tree_sitter_typst_external_scanner_deserialize(
 		read += vec_u32_deserialize(&self->indentation, buffer + read);
 		read += vec_u32_deserialize(&self->containers, buffer + read);
 		self->immediate = buffer[read++];
-		self->heading_level = buffer[read++];
 		self->line_start = buffer[read++];
-		self->raw_level = buffer[read++];
+		memcpy(&self->heading_level, buffer + read, sizeof self->heading_level);
+		read += sizeof self->heading_level;
+		memcpy(&self->raw_level, buffer + read, sizeof self->raw_level);
 	}
 	else {
 		vec_u32_push(&self->indentation, 0);
@@ -504,7 +520,7 @@ bool tree_sitter_typst_external_scanner_scan(
 		lex_advance();
 		lex_advance_if(lex_next == '`');
 		lex_advance_if(lex_next == '`');
-		uint8_t level = 3;
+		uint32_t level = 3;
 		while (lex_next == '`') {
 			lex_advance();
 			level += 1;
@@ -517,7 +533,7 @@ bool tree_sitter_typst_external_scanner_scan(
 	if (valid_symbols[TOKEN_RAW_BLCK_BLOB]) {
 		assert(self->raw_level >= 3, "invalid raw level value %d", self->raw_level);
 		while (!lexer->eof(lexer)) {
-			uint8_t level = 0;
+			uint32_t level = 0;
 			while (lex_next == '`') {
 				lex_advance();
 				level += 1;
@@ -534,7 +550,7 @@ bool tree_sitter_typst_external_scanner_scan(
 
 	if (valid_symbols[TOKEN_RAW_BLCK_RDLM]) {
 		assert(self->raw_level >= 3, "invalid raw level value %d", self->raw_level);
-		for (uint8_t level = 0; level < self->raw_level; level += 1) {
+		for (uint32_t level = 0; level < self->raw_level; level += 1) {
 			lex_advance_if(lex_next == '`');
 		}
 		self->raw_level = 0;
@@ -843,7 +859,7 @@ bool tree_sitter_typst_external_scanner_scan(
 
 	if (self->line_start && valid_symbols[TOKEN_HEAD_1] && lex_next == '=') {
 		lex_advance();
-		size_t count = 1;
+		uint32_t count = 1;
 		while (lex_next == '=') {
 			lex_advance();
 			count += 1;
@@ -854,7 +870,7 @@ bool tree_sitter_typst_external_scanner_scan(
 			lexer->eof(lexer)
 		) {
 			if (self->containers.len > 0 && scanner_container_at(self, 0) >= CONTAINER_SECTION) {
-				uint8_t level = scanner_container_at(self, 0) - CONTAINER_SECTION;
+				uint32_t level = scanner_container_at(self, 0) - CONTAINER_SECTION;
 				if (count <= level) {
 					scanner_container_pop(self);
 					lexer->result_symbol = TOKEN_TERMINATION;
