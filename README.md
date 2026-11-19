@@ -1,4 +1,4 @@
-**This is a fork of https://github.com/uben0/tree-sitter-typst for publishing to crates.io. Please submit issues there.**
+**This is a fork of https://github.com/uben0/tree-sitter-typst, maintained for [Codebook](https://github.com/blopker/codebook) and published to crates.io as `codebook-tree-sitter-typst`. Please submit issues at https://github.com/blopker/codebook-tree-sitter-typst/issues.**
 
 # A Typst grammar for Tree-Sitter
 
